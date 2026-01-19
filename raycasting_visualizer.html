@@ -41,7 +41,7 @@
       }
 
       .app {
-        max-width: 1200px;
+        max-width: 1320px;
         margin: 0 auto;
         padding: 32px 24px 48px;
       }
@@ -65,7 +65,7 @@
 
       .layout {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+        grid-template-columns: minmax(0, 2.4fr) minmax(300px, 1fr);
         gap: 24px;
       }
 
@@ -79,7 +79,7 @@
 
       canvas {
         width: 100%;
-        height: 520px;
+        height: 620px;
         display: block;
         border-radius: 12px;
         background: #f5f0e6;
@@ -271,7 +271,7 @@
           grid-template-columns: 1fr;
         }
         canvas {
-          height: 420px;
+          height: 480px;
         }
       }
     </style>
@@ -476,6 +476,7 @@
       const texCanvas = document.getElementById("texView");
       const texCtx = texCanvas.getContext("2d");
       const STORAGE_KEY = "cub3d-raycast-visualizer-v1";
+      const INFO_BOX_WIDTH = 320;
       const MOVE = {
         walkSpeed: 2.4,
         sprintSpeed: 3.6,
@@ -1145,13 +1146,7 @@
         ctx.clearRect(0, 0, width, height);
 
         const pad = 24;
-        const usableW = width - pad * 2;
         const usableH = height - pad * 2;
-        const cell = Math.min(usableW / state.width, usableH / state.height);
-        const offsetX = (width - state.width * cell) / 2;
-        const offsetY = (height - state.height * cell) / 2;
-
-        drawGrid(cell, offsetX, offsetY);
 
         const rad = (state.angle * Math.PI) / 180;
         const dirX = Math.cos(rad);
@@ -1167,9 +1162,6 @@
           const deltaDistY = rayDirY === 0 ? 1e30 : Math.abs(1 / rayDirY);
           return { cameraX, rayDirX, rayDirY, deltaDistX, deltaDistY };
         }
-
-        const px = offsetX + state.posX * cell;
-        const py = offsetY + state.posY * cell;
 
         const rayCountInt = state.rays;
         const leftCam = -1;
@@ -1234,6 +1226,54 @@
           inspectHit.side === 0
             ? (inspectStats.rayDirX < 0 ? "E" : "W")
             : (inspectStats.rayDirY < 0 ? "S" : "N");
+
+        const infoLines = [
+          `inspect ray (x=${inspectIdx}, camera_x=${inspectCam.toFixed(2)})`,
+          `dir=(${inspectStats.rayDirX.toFixed(2)}, ${inspectStats.rayDirY.toFixed(2)})`,
+          `side_dist_x=${inspectSetup.sideDistX.toFixed(2)}`,
+          `side_dist_y=${inspectSetup.sideDistY.toFixed(2)}`,
+          `delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}`,
+          `delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}`,
+          `hit_dist=${inspectHit.hitDist.toFixed(2)}`
+        ];
+        if (deltaXPoints[0]) {
+          infoLines.push(
+            `X1 t=${deltaXPoints[0].t.toFixed(2)} pos=(${deltaXPoints[0].x.toFixed(2)}, ${deltaXPoints[0].y.toFixed(2)})`
+          );
+        }
+        if (deltaYPoints[0]) {
+          infoLines.push(
+            `Y1 t=${deltaYPoints[0].t.toFixed(2)} pos=(${deltaYPoints[0].x.toFixed(2)}, ${deltaYPoints[0].y.toFixed(2)})`
+          );
+        }
+        if (ddaSteps[0]) {
+          const first = ddaSteps[0];
+          infoLines.push(
+            `D1${first.axis} t=${first.t.toFixed(2)} cell=(${first.mapX}, ${first.mapY})`
+          );
+        }
+        infoLines.push(
+          `t=1 pos=(${(state.posX + inspectStats.rayDirX).toFixed(2)}, ${(state.posY + inspectStats.rayDirY).toFixed(2)})`
+        );
+        infoLines.push(
+          `wall_x=${wallX.toFixed(2)} tex_x=${finalTexX} tex=${texName} flip=${flipApplied ? "yes" : "no"}`
+        );
+
+        const infoMetrics = getInfoBoxMetrics(infoLines, INFO_BOX_WIDTH);
+        let leftGutter = Math.max(pad, infoMetrics.boxWidth + 20);
+        let usableW = width - leftGutter - pad;
+        if (usableW <= 0) {
+          leftGutter = pad;
+          usableW = width - pad * 2;
+        }
+        const cell = Math.min(usableW / state.width, usableH / state.height);
+        const offsetX = leftGutter + (usableW - state.width * cell) / 2;
+        const offsetY = pad + (usableH - state.height * cell) / 2;
+
+        drawGrid(cell, offsetX, offsetY);
+
+        const px = offsetX + state.posX * cell;
+        const py = offsetY + state.posY * cell;
 
         for (let i = 0; i < rayCountInt; i++) {
           const cameraX = (2 * i) / rayCountInt - 1;
@@ -1317,39 +1357,7 @@
         ctx.arc(px, py, 5, 0, Math.PI * 2);
         ctx.fill();
 
-        const infoLines = [
-          `inspect ray (x=${inspectIdx}, camera_x=${inspectCam.toFixed(2)})`,
-          `dir=(${inspectStats.rayDirX.toFixed(2)}, ${inspectStats.rayDirY.toFixed(2)})`,
-          `side_dist_x=${inspectSetup.sideDistX.toFixed(2)}`,
-          `side_dist_y=${inspectSetup.sideDistY.toFixed(2)}`,
-          `delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}`,
-          `delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}`,
-          `hit_dist=${inspectHit.hitDist.toFixed(2)}`
-        ];
-        if (deltaXPoints[0]) {
-          infoLines.push(
-            `X1 t=${deltaXPoints[0].t.toFixed(2)} pos=(${deltaXPoints[0].x.toFixed(2)}, ${deltaXPoints[0].y.toFixed(2)})`
-          );
-        }
-        if (deltaYPoints[0]) {
-          infoLines.push(
-            `Y1 t=${deltaYPoints[0].t.toFixed(2)} pos=(${deltaYPoints[0].x.toFixed(2)}, ${deltaYPoints[0].y.toFixed(2)})`
-          );
-        }
-        if (ddaSteps[0]) {
-          const first = ddaSteps[0];
-          infoLines.push(
-            `D1${first.axis} t=${first.t.toFixed(2)} cell=(${first.mapX}, ${first.mapY})`
-          );
-        }
-        infoLines.push(
-          `t=1 pos=(${(state.posX + inspectStats.rayDirX).toFixed(2)}, ${(state.posY + inspectStats.rayDirY).toFixed(2)})`
-        );
-        infoLines.push(
-          `wall_x=${wallX.toFixed(2)} tex_x=${finalTexX} tex=${texName} flip=${flipApplied ? "yes" : "no"}`
-        );
-        const infoMetrics = getInfoBoxMetrics(infoLines);
-        const infoX = Math.max(8, offsetX - infoMetrics.boxWidth - 12);
+        const infoX = Math.max(8, leftGutter - infoMetrics.boxWidth - 12);
         const infoY = Math.max(8, offsetY);
         drawInfoBox(infoLines, infoX, infoY, infoMetrics);
         const overviewLines = [
@@ -1365,17 +1373,21 @@
         readout.textContent = overviewLines.concat(["", "inspect"], infoLines).join("\n");
       }
 
-      function getInfoBoxMetrics(lines) {
+      function getInfoBoxMetrics(lines, forcedWidth) {
         const padding = 8;
         const lineHeight = 16;
-        ctx.save();
-        ctx.font = '12px "Space Mono", "Courier New", monospace';
         let boxWidth = 0;
-        for (const line of lines) {
-          boxWidth = Math.max(boxWidth, ctx.measureText(line).width);
+        if (typeof forcedWidth === "number") {
+          boxWidth = forcedWidth;
+        } else {
+          ctx.save();
+          ctx.font = '12px "Space Mono", "Courier New", monospace';
+          for (const line of lines) {
+            boxWidth = Math.max(boxWidth, ctx.measureText(line).width);
+          }
+          ctx.restore();
+          boxWidth += padding * 2;
         }
-        ctx.restore();
-        boxWidth += padding * 2;
         const boxHeight = lines.length * lineHeight + padding * 2;
         return { padding, lineHeight, boxWidth, boxHeight };
       }
