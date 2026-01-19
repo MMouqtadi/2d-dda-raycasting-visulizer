@@ -1348,40 +1348,17 @@
         infoLines.push(
           `wall_x=${wallX.toFixed(2)} tex_x=${finalTexX} tex=${texName} flip=${flipApplied ? "yes" : "no"}`
         );
-        drawInfoBox(infoLines, pad, pad);
-
-        readout.textContent =
-          `dir=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})  plane=(${planeX.toFixed(2)}, ${planeY.toFixed(2)})\n` +
-          `fov=${state.fov}  plane_len=${planeLen.toFixed(2)}  (tan(FOV/2))\n` +
-          `camera_x left=${leftCam.toFixed(2)}  center=${(0).toFixed(2)}  right=${rightCam.toFixed(2)}\n` +
-          `left delta_dist_x=${leftStats.deltaDistX.toFixed(2)}  right delta_dist_x=${rightStats.deltaDistX.toFixed(2)}\n` +
-          `center delta_dist_x=${centerStats.deltaDistX.toFixed(2)}  center delta_dist_y=${centerStats.deltaDistY.toFixed(2)}\n` +
-          `inspect delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}  inspect delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}\n` +
-          `tex_w=${state.texWidth}  wall_x=${wallX.toFixed(2)}  tex_x=${finalTexX}  tex=${texName}  flip=${flipApplied ? "yes" : "no"}\n` +
-          `pos=(${state.posX.toFixed(2)}, ${state.posY.toFixed(2)})  map size=${state.width}x${state.height}`;
-      }
-
-      function drawInfoBox(lines, x, y) {
-        const padding = 8;
-        const lineHeight = 16;
-        ctx.save();
-        ctx.font = '12px "Space Mono", "Courier New", monospace';
-        let boxWidth = 0;
-        for (const line of lines) {
-          boxWidth = Math.max(boxWidth, ctx.measureText(line).width);
-        }
-        boxWidth += padding * 2;
-        const boxHeight = lines.length * lineHeight + padding * 2;
-        ctx.fillStyle = "rgba(248, 244, 234, 0.9)";
-        ctx.strokeStyle = getVar("--grid");
-        ctx.lineWidth = 1;
-        ctx.fillRect(x, y, boxWidth, boxHeight);
-        ctx.strokeRect(x, y, boxWidth, boxHeight);
-        ctx.fillStyle = getVar("--ink");
-        lines.forEach((line, idx) => {
-          ctx.fillText(line, x + padding, y + padding + lineHeight * (idx + 1) - 4);
-        });
-        ctx.restore();
+        const overviewLines = [
+          `dir=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})  plane=(${planeX.toFixed(2)}, ${planeY.toFixed(2)})`,
+          `fov=${state.fov}  plane_len=${planeLen.toFixed(2)}  (tan(FOV/2))`,
+          `camera_x left=${leftCam.toFixed(2)}  center=${(0).toFixed(2)}  right=${rightCam.toFixed(2)}`,
+          `left delta_dist_x=${leftStats.deltaDistX.toFixed(2)}  right delta_dist_x=${rightStats.deltaDistX.toFixed(2)}`,
+          `center delta_dist_x=${centerStats.deltaDistX.toFixed(2)}  center delta_dist_y=${centerStats.deltaDistY.toFixed(2)}`,
+          `inspect delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}  inspect delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}`,
+          `tex_w=${state.texWidth}  wall_x=${wallX.toFixed(2)}  tex_x=${finalTexX}  tex=${texName}  flip=${flipApplied ? "yes" : "no"}`,
+          `pos=(${state.posX.toFixed(2)}, ${state.posY.toFixed(2)})  map size=${state.width}x${state.height}`
+        ];
+        readout.textContent = overviewLines.concat(["", "inspect"], infoLines).join("\n");
       }
 
       function getVar(name) {
