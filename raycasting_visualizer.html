@@ -1348,6 +1348,10 @@
         infoLines.push(
           `wall_x=${wallX.toFixed(2)} tex_x=${finalTexX} tex=${texName} flip=${flipApplied ? "yes" : "no"}`
         );
+        const infoMetrics = getInfoBoxMetrics(infoLines);
+        const infoX = Math.max(8, offsetX - infoMetrics.boxWidth - 12);
+        const infoY = Math.max(8, offsetY);
+        drawInfoBox(infoLines, infoX, infoY, infoMetrics);
         const overviewLines = [
           `dir=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})  plane=(${planeX.toFixed(2)}, ${planeY.toFixed(2)})`,
           `fov=${state.fov}  plane_len=${planeLen.toFixed(2)}  (tan(FOV/2))`,
@@ -1359,6 +1363,37 @@
           `pos=(${state.posX.toFixed(2)}, ${state.posY.toFixed(2)})  map size=${state.width}x${state.height}`
         ];
         readout.textContent = overviewLines.concat(["", "inspect"], infoLines).join("\n");
+      }
+
+      function getInfoBoxMetrics(lines) {
+        const padding = 8;
+        const lineHeight = 16;
+        ctx.save();
+        ctx.font = '12px "Space Mono", "Courier New", monospace';
+        let boxWidth = 0;
+        for (const line of lines) {
+          boxWidth = Math.max(boxWidth, ctx.measureText(line).width);
+        }
+        ctx.restore();
+        boxWidth += padding * 2;
+        const boxHeight = lines.length * lineHeight + padding * 2;
+        return { padding, lineHeight, boxWidth, boxHeight };
+      }
+
+      function drawInfoBox(lines, x, y, metrics) {
+        const { padding, lineHeight, boxWidth, boxHeight } = metrics || getInfoBoxMetrics(lines);
+        ctx.save();
+        ctx.font = '12px "Space Mono", "Courier New", monospace';
+        ctx.fillStyle = "rgba(248, 244, 234, 0.9)";
+        ctx.strokeStyle = getVar("--grid");
+        ctx.lineWidth = 1;
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+        ctx.strokeRect(x, y, boxWidth, boxHeight);
+        ctx.fillStyle = getVar("--ink");
+        lines.forEach((line, idx) => {
+          ctx.fillText(line, x + padding, y + padding + lineHeight * (idx + 1) - 4);
+        });
+        ctx.restore();
       }
 
       function getVar(name) {
