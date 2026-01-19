@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cub3D Raycasting Visualizer</title>
+    <style>
+      :root {
+        --bg-1: #f3efe6;
+        --bg-2: #d9d2c3;
+        --ink: #1c1b18;
+        --muted: #5c564c;
+        --panel: #f8f4ea;
+        --accent: #e46e4e;
+        --accent-2: #2b7a78;
+        --grid: #b8b1a2;
+        --wall: #2f2a24;
+        --floor: #efe6d7;
+        --void: #c7c0b3;
+        --ray: rgba(228, 110, 78, 0.25);
+        --ray-strong: rgba(228, 110, 78, 0.7);
+        --plane: #2b7a78;
+        --dir: #1f57c2;
+        --hit: #7d2e2e;
+        --delta-x: #ff9f1c;
+        --delta-y: #118ab2;
+        --dda: #6c5ce7;
+        --unit: #2a9d8f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Mono", "Courier New", monospace;
+        color: var(--ink);
+        background: radial-gradient(circle at 20% 20%, #ffffff 0, var(--bg-1) 45%, var(--bg-2) 100%);
+        min-height: 100vh;
+      }
+
+      .app {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 24px 48px;
+      }
+
+      header {
+        margin-bottom: 24px;
+        animation: fade-in 500ms ease-out both;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-family: "Bodoni MT", "Didot", serif;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      header p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+        gap: 24px;
+      }
+
+      .viz {
+        background: linear-gradient(135deg, #ffffff 0%, #f3ede2 100%);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 18px 40px rgba(27, 24, 18, 0.1);
+        animation: rise-in 650ms ease-out both;
+      }
+
+      canvas {
+        width: 100%;
+        height: 520px;
+        display: block;
+        border-radius: 12px;
+        background: #f5f0e6;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 16px;
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      #texView {
+        width: 100%;
+        height: 160px;
+        display: block;
+        border-radius: 10px;
+        background: #fffdf7;
+        margin-top: 8px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 18px 40px rgba(27, 24, 18, 0.08);
+        animation: rise-in 800ms ease-out both;
+      }
+
+      .group {
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px dashed #d1c7b5;
+      }
+
+      .group:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 140px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #d7cdbb;
+        font-family: "Space Mono", "Courier New", monospace;
+        background: #fffdf7;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .camera-meter {
+        position: relative;
+        height: 34px;
+        margin-top: 8px;
+      }
+
+      .camera-track {
+        position: absolute;
+        top: 6px;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: #d7cdbb;
+        border-radius: 999px;
+      }
+
+      .camera-marker {
+        position: absolute;
+        top: 2px;
+        width: 10px;
+        height: 14px;
+        background: var(--accent);
+        border-radius: 6px;
+        transform: translateX(-50%);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+      }
+
+      .camera-labels {
+        position: absolute;
+        top: 16px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .value {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      button {
+        background: var(--ink);
+        color: #fff;
+        border: none;
+        border-radius: 999px;
+        padding: 8px 14px;
+        cursor: pointer;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      button.secondary {
+        background: #d7cdbb;
+        color: #2b241e;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .readout {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--muted);
+        white-space: pre-wrap;
+      }
+
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        canvas {
+          height: 420px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>cub3D Raycasting Playground</h1>
+        <p>Top-down view of dir, plane, rays, and where each ray hits the map grid.</p>
+      </header>
+
+      <main class="layout">
+        <section class="viz">
+          <canvas id="view" aria-label="Raycasting view"></canvas>
+          <div class="legend">
+            <span><i class="dot" style="background: var(--dir)"></i>dir</span>
+            <span><i class="dot" style="background: var(--plane)"></i>plane</span>
+            <span><i class="dot" style="background: var(--ray-strong)"></i>inspect ray</span>
+            <span><i class="dot" style="background: var(--ray)"></i>other rays</span>
+            <span><i class="dot" style="background: var(--hit)"></i>hit point</span>
+            <span><i class="dot" style="background: var(--delta-x)"></i>delta x hits</span>
+            <span><i class="dot" style="background: var(--delta-y)"></i>delta y hits</span>
+            <span><i class="dot" style="background: var(--dda)"></i>DDA step</span>
+            <span><i class="dot" style="background: var(--unit)"></i>1 unit along ray</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="group">
+            <label for="mapInput">Map (spaces are preserved)</label>
+            <textarea id="mapInput" spellcheck="false"></textarea>
+            <div class="button-row" style="margin-top: 10px;">
+              <button id="applyMap">Apply Map</button>
+              <button id="useSpawn" class="secondary">Use Spawn</button>
+            </div>
+            <div class="hint">Spawn uses N/E/S/W and replaces it with 0 for raycasts.</div>
+          </div>
+
+          <div class="group">
+            <label>Rays (screen columns)</label>
+            <div class="row">
+              <input id="rayCount" type="range" min="8" max="160" value="60" />
+              <div class="value" id="rayCountValue">60</div>
+            </div>
+          </div>
+
+          <div class="group">
+            <label>Inspect Ray (column index)</label>
+            <div class="row">
+              <input id="inspectRay" type="range" min="0" max="59" value="30" />
+              <div class="value" id="inspectValue">30</div>
+            </div>
+            <div class="camera-meter">
+              <div class="camera-track"></div>
+              <div class="camera-marker" id="cameraMarker"></div>
+              <div class="camera-labels">
+                <span>-1</span>
+                <span>0</span>
+                <span>+1</span>
+              </div>
+            </div>
+            <div class="value" id="cameraValue">camera_x 0.00</div>
+          </div>
+
+          <div class="group">
+            <label>Texture Mapping (tex_x + mirroring)</label>
+            <canvas id="texView" aria-label="Texture mapping view"></canvas>
+            <div class="row">
+              <input id="texWidth" type="range" min="8" max="128" value="64" />
+              <div class="value" id="texWidthValue">64</div>
+            </div>
+          </div>
+
+          <div class="group">
+            <label>Delta Visualization</label>
+            <div class="row">
+              <span class="value">Show delta markers</span>
+              <input id="showDelta" type="checkbox" checked />
+            </div>
+            <div class="row">
+              <span class="value">Show DDA steps</span>
+              <input id="showDda" type="checkbox" checked />
+            </div>
+            <div class="row">
+              <span class="value">Show 1-unit step</span>
+              <input id="showUnit" type="checkbox" checked />
+            </div>
+            <div class="row">
+              <span class="value">Show labels</span>
+              <input id="showLabels" type="checkbox" checked />
+            </div>
+            <div class="row">
+              <input id="markerSize" type="range" min="2" max="8" value="4" />
+              <div class="value" id="markerSizeValue">4</div>
+            </div>
+          </div>
+
+          <div class="group">
+            <label>Field of View (degrees)</label>
+            <div class="row">
+              <input id="fov" type="range" min="30" max="110" value="66" />
+              <div class="value" id="fovValue">66</div>
+            </div>
+            <div class="row">
+              <span class="value">Show FOV triangle</span>
+              <input id="showFovTriangle" type="checkbox" checked />
+            </div>
+            <div class="hint">plane_len = <span id="planeLenValue">0.65</span> (tan(FOV / 2))</div>
+          </div>
+
+          <div class="group">
+            <label>Angle (0=E, 90=S, 180=W, 270=N)</label>
+            <div class="row">
+              <input id="angle" type="range" min="0" max="359" value="270" />
+              <div class="value" id="angleValue">270</div>
+            </div>
+            <div class="button-row" style="margin-top: 8px;">
+              <button data-angle="270" class="secondary">N</button>
+              <button data-angle="0" class="secondary">E</button>
+              <button data-angle="90" class="secondary">S</button>
+              <button data-angle="180" class="secondary">W</button>
+            </div>
+          </div>
+
+          <div class="group">
+            <label>Player Position (map space)</label>
+            <div class="row">
+              <input id="posX" type="range" min="0.1" max="4.9" step="0.1" value="2.5" />
+              <div class="value" id="posXValue">2.5</div>
+            </div>
+            <div class="row">
+              <input id="posY" type="range" min="0.1" max="4.9" step="0.1" value="2.5" />
+              <div class="value" id="posYValue">2.5</div>
+            </div>
+            <div class="button-row" style="margin-top: 8px;">
+              <button id="snapCenter" class="secondary">Snap to Cell Center</button>
+            </div>
+          </div>
+
+          <div class="group">
+            <label>Readout</label>
+            <div class="readout" id="readout"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const state = {
+        mapLines: [],
+        grid: [],
+        width: 0,
+        height: 0,
+        posX: 2.5,
+        posY: 2.5,
+        angle: 270,
+        fov: 66,
+        rays: 60,
+        inspect: 30,
+        texWidth: 64,
+        showDelta: true,
+        showDda: true,
+        showUnit: true,
+        showFovTriangle: true,
+        showLabels: true,
+        markerSize: 4
+      };
+
+      const mapInput = document.getElementById("mapInput");
+      const applyMap = document.getElementById("applyMap");
+      const useSpawn = document.getElementById("useSpawn");
+      const rayCount = document.getElementById("rayCount");
+      const rayCountValue = document.getElementById("rayCountValue");
+      const inspectRay = document.getElementById("inspectRay");
+      const inspectValue = document.getElementById("inspectValue");
+      const cameraMarker = document.getElementById("cameraMarker");
+      const cameraValue = document.getElementById("cameraValue");
+      const texWidth = document.getElementById("texWidth");
+      const texWidthValue = document.getElementById("texWidthValue");
+      const showDelta = document.getElementById("showDelta");
+      const showDda = document.getElementById("showDda");
+      const showUnit = document.getElementById("showUnit");
+      const showFovTriangle = document.getElementById("showFovTriangle");
+      const showLabels = document.getElementById("showLabels");
+      const markerSize = document.getElementById("markerSize");
+      const markerSizeValue = document.getElementById("markerSizeValue");
+      const fov = document.getElementById("fov");
+      const fovValue = document.getElementById("fovValue");
+      const planeLenValue = document.getElementById("planeLenValue");
+      const angle = document.getElementById("angle");
+      const angleValue = document.getElementById("angleValue");
+      const posX = document.getElementById("posX");
+      const posXValue = document.getElementById("posXValue");
+      const posY = document.getElementById("posY");
+      const posYValue = document.getElementById("posYValue");
+      const readout = document.getElementById("readout");
+      const snapCenter = document.getElementById("snapCenter");
+
+      const canvas = document.getElementById("view");
+      const ctx = canvas.getContext("2d");
+      const texCanvas = document.getElementById("texView");
+      const texCtx = texCanvas.getContext("2d");
+      const STORAGE_KEY = "cub3d-raycast-visualizer-v1";
+
+      function saveSettings() {
+        try {
+          const payload = {
+            mapText: mapInput.value,
+            posX: state.posX,
+            posY: state.posY,
+            angle: state.angle,
+            fov: state.fov,
+            rays: state.rays,
+            inspect: state.inspect,
+            texWidth: state.texWidth,
+            showDelta: state.showDelta,
+            showDda: state.showDda,
+            showUnit: state.showUnit,
+            showFovTriangle: state.showFovTriangle,
+            showLabels: state.showLabels,
+            markerSize: state.markerSize
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (err) {
+          return;
+        }
+      }
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (err) {
+          return null;
+        }
+      }
+
+      function getDefaultMap() {
+        return [
+          "1111111",
+          "1000001",
+          "10N0001",
+          "1000101",
+          "1000001",
+          "1111111"
+        ].join("\n");
+      }
+
+      function setDefaultMap() {
+        mapInput.value = getDefaultMap();
+        applyMapData(true);
+      }
+
+      function parseMap(raw) {
+        const lines = raw.replace(/\r/g, "").split("\n");
+        while (lines.length && lines[lines.length - 1] === "") {
+          lines.pop();
+        }
+        while (lines.length && lines[0] === "") {
+          lines.shift();
+        }
+        const width = lines.reduce((max, line) => Math.max(max, line.length), 0);
+        const grid = lines.map((line) => {
+          const row = line.split("");
+          while (row.length < width) row.push(" ");
+          return row;
+        });
+        return { lines, grid, width, height: lines.length };
+      }
+
+      function findSpawn(grid) {
+        for (let y = 0; y < grid.length; y++) {
+          for (let x = 0; x < grid[y].length; x++) {
+            const c = grid[y][x];
+            if ("NSEW".includes(c)) return { x, y, c };
+          }
+        }
+        return null;
+      }
+
+      function applyMapData(useSpawnNow) {
+        const parsed = parseMap(mapInput.value);
+        state.mapLines = parsed.lines;
+        state.grid = parsed.grid;
+        state.width = parsed.width || 1;
+        state.height = parsed.height || 1;
+
+        if (useSpawnNow) {
+          const spawn = findSpawn(state.grid);
+          if (spawn) {
+            state.posX = spawn.x + 0.5;
+            state.posY = spawn.y + 0.5;
+            state.angle = spawn.c === "E" ? 0 : spawn.c === "S" ? 90 : spawn.c === "W" ? 180 : 270;
+            state.grid[spawn.y][spawn.x] = "0";
+          }
+        }
+
+        posX.max = Math.max(0.1, state.width - 0.1).toFixed(1);
+        posY.max = Math.max(0.1, state.height - 0.1).toFixed(1);
+        posX.value = state.posX.toFixed(1);
+        posY.value = state.posY.toFixed(1);
+        angle.value = state.angle;
+        updateLabels();
+        draw();
+        saveSettings();
+      }
+
+      function updateLabels() {
+        syncInspectRange();
+        rayCountValue.textContent = state.rays;
+        inspectValue.textContent = state.inspect;
+        const rayCountInt = Math.max(1, state.rays);
+        const inspectIdx = Math.min(Math.max(state.inspect, 0), rayCountInt - 1);
+        const cameraX = (2 * inspectIdx) / rayCountInt - 1;
+        cameraValue.textContent = `camera_x ${cameraX.toFixed(2)}`;
+        cameraMarker.style.left = `${((cameraX + 1) / 2) * 100}%`;
+        texWidthValue.textContent = state.texWidth;
+        markerSizeValue.textContent = state.markerSize;
+        fovValue.textContent = state.fov;
+        planeLenValue.textContent = Math.tan((state.fov * Math.PI) / 360).toFixed(2);
+        angleValue.textContent = state.angle;
+        posXValue.textContent = state.posX.toFixed(1);
+        posYValue.textContent = state.posY.toFixed(1);
+      }
+
+      function syncInspectRange() {
+        const max = Math.max(0, state.rays - 1);
+        if (state.inspect > max) state.inspect = max;
+        if (state.inspect < 0) state.inspect = 0;
+        inspectRay.max = max;
+        inspectRay.value = state.inspect;
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const texRect = texCanvas.getBoundingClientRect();
+        texCanvas.width = texRect.width * dpr;
+        texCanvas.height = texRect.height * dpr;
+        texCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        draw();
+      }
+
+      function castRay(posX, posY, dirX, dirY) {
+        const grid = state.grid;
+        const maxY = state.height;
+        const maxX = state.width;
+
+        let mapX = Math.floor(posX);
+        let mapY = Math.floor(posY);
+
+        const deltaDistX = dirX === 0 ? 1e30 : Math.abs(1 / dirX);
+        const deltaDistY = dirY === 0 ? 1e30 : Math.abs(1 / dirY);
+
+        let stepX;
+        let stepY;
+        let sideDistX;
+        let sideDistY;
+
+        if (dirX < 0) {
+          stepX = -1;
+          sideDistX = (posX - mapX) * deltaDistX;
+        } else {
+          stepX = 1;
+          sideDistX = (mapX + 1.0 - posX) * deltaDistX;
+        }
+
+        if (dirY < 0) {
+          stepY = -1;
+          sideDistY = (posY - mapY) * deltaDistY;
+        } else {
+          stepY = 1;
+          sideDistY = (mapY + 1.0 - posY) * deltaDistY;
+        }
+
+        let side = 0;
+        let hitType = "none";
+        for (let i = 0; i < 2048; i++) {
+          if (sideDistX < sideDistY) {
+            sideDistX += deltaDistX;
+            mapX += stepX;
+            side = 0;
+          } else {
+            sideDistY += deltaDistY;
+            mapY += stepY;
+            side = 1;
+          }
+
+          if (mapX < 0 || mapY < 0 || mapX >= maxX || mapY >= maxY) {
+            hitType = "oob";
+            break;
+          }
+
+          const cell = grid[mapY][mapX];
+          if (cell === "1" || cell === " ") {
+            hitType = cell;
+            break;
+          }
+        }
+
+        const dist = side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+        return {
+          hitX: posX + dirX * dist,
+          hitY: posY + dirY * dist,
+          hitDist: dist,
+          hitType,
+          side,
+          mapX,
+          mapY
+        };
+      }
+
+      function ddaSetup(posX, posY, dirX, dirY) {
+        let mapX = Math.floor(posX);
+        let mapY = Math.floor(posY);
+
+        const deltaDistX = dirX === 0 ? 1e30 : Math.abs(1 / dirX);
+        const deltaDistY = dirY === 0 ? 1e30 : Math.abs(1 / dirY);
+
+        let stepX;
+        let stepY;
+        let sideDistX;
+        let sideDistY;
+
+        if (dirX < 0) {
+          stepX = -1;
+          sideDistX = (posX - mapX) * deltaDistX;
+        } else {
+          stepX = 1;
+          sideDistX = (mapX + 1.0 - posX) * deltaDistX;
+        }
+
+        if (dirY < 0) {
+          stepY = -1;
+          sideDistY = (posY - mapY) * deltaDistY;
+        } else {
+          stepY = 1;
+          sideDistY = (mapY + 1.0 - posY) * deltaDistY;
+        }
+
+        return { mapX, mapY, stepX, stepY, sideDistX, sideDistY, deltaDistX, deltaDistY };
+      }
+
+      function computeDeltaPoints(start, step, dirX, dirY, posX, posY, count, maxT) {
+        const points = [];
+        const clamp = Number.isFinite(maxT) ? maxT + 1e-6 : null;
+        for (let i = 0; i < count; i++) {
+          const t = start + step * i;
+          if (clamp !== null && t > clamp) break;
+          points.push({
+            t,
+            x: posX + dirX * t,
+            y: posY + dirY * t
+          });
+        }
+        return points;
+      }
+
+      function drawMarkerLabel(text, x, y) {
+        ctx.save();
+        ctx.font = '11px "Space Mono", "Courier New", monospace';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(248, 244, 234, 0.9)";
+        ctx.strokeText(text, x + 6, y - 6);
+        ctx.fillStyle = getVar("--ink");
+        ctx.fillText(text, x + 6, y - 6);
+        ctx.restore();
+      }
+
+      function drawDeltaMarkers(deltaXPoints, deltaYPoints, cell, offsetX, offsetY) {
+        const limitX = state.width;
+        const limitY = state.height;
+        const radius = state.markerSize;
+
+        deltaXPoints.forEach((pt, idx) => {
+          if (pt.x < 0 || pt.y < 0 || pt.x > limitX || pt.y > limitY) return;
+          const sx = offsetX + pt.x * cell;
+          const sy = offsetY + pt.y * cell;
+          ctx.fillStyle = getVar("--delta-x");
+          ctx.beginPath();
+          ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+          ctx.fill();
+          if (state.showLabels) drawMarkerLabel(`X${idx + 1}`, sx, sy);
+        });
+
+        deltaYPoints.forEach((pt, idx) => {
+          if (pt.x < 0 || pt.y < 0 || pt.x > limitX || pt.y > limitY) return;
+          const sx = offsetX + pt.x * cell;
+          const sy = offsetY + pt.y * cell;
+          ctx.fillStyle = getVar("--delta-y");
+          ctx.beginPath();
+          ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+          ctx.fill();
+          if (state.showLabels) drawMarkerLabel(`Y${idx + 1}`, sx, sy);
+        });
+      }
+
+      function computeDdaSteps(setup, dirX, dirY, posX, posY, maxSteps, maxT) {
+        const steps = [];
+        let sideDistX = setup.sideDistX;
+        let sideDistY = setup.sideDistY;
+        let mapX = setup.mapX;
+        let mapY = setup.mapY;
+        const deltaDistX = setup.deltaDistX;
+        const deltaDistY = setup.deltaDistY;
+        const stepX = setup.stepX;
+        const stepY = setup.stepY;
+        const clamp = Number.isFinite(maxT) ? maxT + 1e-6 : null;
+
+        for (let i = 0; i < maxSteps; i++) {
+          let t;
+          let axis;
+          if (sideDistX < sideDistY) {
+            t = sideDistX;
+            sideDistX += deltaDistX;
+            mapX += stepX;
+            axis = "x";
+          } else {
+            t = sideDistY;
+            sideDistY += deltaDistY;
+            mapY += stepY;
+            axis = "y";
+          }
+          if (clamp !== null && t > clamp) break;
+          steps.push({
+            t,
+            axis,
+            mapX,
+            mapY,
+            x: posX + dirX * t,
+            y: posY + dirY * t
+          });
+        }
+        return steps;
+      }
+
+      function drawDdaSteps(steps, cell, offsetX, offsetY) {
+        const limitX = state.width;
+        const limitY = state.height;
+        const radius = state.markerSize + 1;
+        steps.forEach((step, idx) => {
+          if (step.x < 0 || step.y < 0 || step.x > limitX || step.y > limitY) return;
+          const sx = offsetX + step.x * cell;
+          const sy = offsetY + step.y * cell;
+          ctx.fillStyle = getVar("--dda");
+          ctx.beginPath();
+          ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+          ctx.fill();
+          if (state.showLabels) drawMarkerLabel(`D${idx + 1}${step.axis}`, sx, sy);
+        });
+      }
+
+      function drawUnitStep(posX, posY, dirX, dirY, cell, offsetX, offsetY) {
+        const unitX = posX + dirX;
+        const unitY = posY + dirY;
+        const startX = offsetX + posX * cell;
+        const startY = offsetY + posY * cell;
+        const endX = offsetX + unitX * cell;
+        const endY = offsetY + unitY * cell;
+        const midX = offsetX + (posX + dirX) * cell;
+        const midY = offsetY + posY * cell;
+
+        ctx.save();
+        ctx.strokeStyle = getVar("--unit");
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = getVar("--unit");
+        ctx.beginPath();
+        ctx.arc(endX, endY, state.markerSize + 1, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.showLabels) {
+          drawMarkerLabel("t=1", endX, endY);
+          drawMarkerLabel("dx", (startX + midX) / 2, (startY + midY) / 2);
+          drawMarkerLabel("dy", (midX + endX) / 2, (midY + endY) / 2);
+        }
+      }
+
+      function drawFovTriangle(posX, posY, dirX, dirY, planeX, planeY, planeLen, cell, offsetX, offsetY) {
+        const startX = offsetX + posX * cell;
+        const startY = offsetY + posY * cell;
+        const forwardX = offsetX + (posX + dirX) * cell;
+        const forwardY = offsetY + (posY + dirY) * cell;
+        const leftX = offsetX + (posX + dirX + planeX) * cell;
+        const leftY = offsetY + (posY + dirY + planeY) * cell;
+        const rightX = offsetX + (posX + dirX - planeX) * cell;
+        const rightY = offsetY + (posY + dirY - planeY) * cell;
+
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = getVar("--accent");
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(leftX, leftY);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(rightX, rightY);
+        ctx.stroke();
+
+        ctx.strokeStyle = getVar("--dir");
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(forwardX, forwardY);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.strokeStyle = getVar("--plane");
+        ctx.beginPath();
+        ctx.moveTo(leftX, leftY);
+        ctx.lineTo(rightX, rightY);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = getVar("--plane");
+        ctx.beginPath();
+        ctx.arc(forwardX, forwardY, state.markerSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (state.showLabels) {
+          const midForwardX = (startX + forwardX) / 2;
+          const midForwardY = (startY + forwardY) / 2;
+          const labelX = forwardX - dirX * cell * 0.2;
+          const labelY = forwardY - dirY * cell * 0.2;
+          drawMarkerLabel("1 unit", midForwardX, midForwardY);
+          drawMarkerLabel(`tan(FOV/2)=${planeLen.toFixed(2)}`, labelX, labelY);
+        }
+      }
+
+      function drawTextureMapping(wallX, texWidth, rawTexX, finalTexX, flipApplied, side, dirX, dirY) {
+        const rect = texCanvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        texCtx.clearRect(0, 0, width, height);
+
+        const texName =
+          side === 0
+            ? (dirX < 0 ? "E" : "W")
+            : (dirY < 0 ? "S" : "N");
+
+        const pad = 12;
+        const barHeight = 12;
+        const barWidth = width - pad * 2;
+        const barX = pad;
+        const barY = pad + 4;
+
+        texCtx.strokeStyle = getVar("--grid");
+        texCtx.lineWidth = 1;
+        texCtx.strokeRect(barX, barY, barWidth, barHeight);
+
+        const wallMarkerX = barX + wallX * barWidth;
+        texCtx.strokeStyle = getVar("--accent-2");
+        texCtx.beginPath();
+        texCtx.moveTo(wallMarkerX, barY - 4);
+        texCtx.lineTo(wallMarkerX, barY + barHeight + 4);
+        texCtx.stroke();
+
+        texCtx.fillStyle = getVar("--muted");
+        texCtx.font = '11px "Space Mono", "Courier New", monospace';
+        texCtx.fillText("wall_x", barX, barY - 6);
+        texCtx.fillText("0", barX - 2, barY + barHeight + 18);
+        texCtx.fillText("1", barX + barWidth - 6, barY + barHeight + 18);
+
+        const stripTop = barY + barHeight + 26;
+        const stripHeight = height - stripTop - pad - 8;
+        const colWidth = barWidth / texWidth;
+
+        for (let col = 0; col < texWidth; col++) {
+          const hue = (col / texWidth) * 300 + 20;
+          texCtx.fillStyle = `hsl(${hue}, 60%, 60%)`;
+          texCtx.fillRect(barX + col * colWidth, stripTop, colWidth + 1, stripHeight);
+        }
+
+        function drawTexLine(index, color, label) {
+          const x = barX + (index + 0.5) * colWidth;
+          texCtx.strokeStyle = color;
+          texCtx.lineWidth = 2;
+          texCtx.beginPath();
+          texCtx.moveTo(x, stripTop - 6);
+          texCtx.lineTo(x, stripTop + stripHeight + 6);
+          texCtx.stroke();
+          texCtx.fillStyle = color;
+          texCtx.fillText(label, x + 4, stripTop + stripHeight + 18);
+        }
+
+        const rawColor = getVar("--muted");
+        const finalColor = flipApplied ? getVar("--accent") : getVar("--accent-2");
+
+        drawTexLine(rawTexX, rawColor, "raw");
+        if (flipApplied) drawTexLine(finalTexX, finalColor, "flipped");
+        else drawTexLine(finalTexX, finalColor, "used");
+
+        texCtx.fillStyle = getVar("--ink");
+        texCtx.fillText(
+          `tex_w=${texWidth} side=${side === 0 ? "X" : "Y"} tex=${texName} flip=${flipApplied ? "yes" : "no"}`,
+          barX,
+          stripTop - 10
+        );
+        texCtx.fillText(
+          `wall_x=${wallX.toFixed(2)} raw=${rawTexX} final=${finalTexX}`,
+          barX,
+          stripTop + stripHeight + 32
+        );
+        texCtx.fillText(
+          `dir=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})`,
+          barX,
+          stripTop + stripHeight + 46
+        );
+      }
+
+      function drawGrid(cell, offsetX, offsetY) {
+        for (let y = 0; y < state.height; y++) {
+          for (let x = 0; x < state.width; x++) {
+            const cellX = offsetX + x * cell;
+            const cellY = offsetY + y * cell;
+            const c = state.grid[y][x] || " ";
+
+            if (c === "1") {
+              ctx.fillStyle = getVar("--wall");
+            } else if (c === " ") {
+              ctx.fillStyle = getVar("--void");
+            } else {
+              ctx.fillStyle = getVar("--floor");
+            }
+            ctx.fillRect(cellX, cellY, cell, cell);
+
+            ctx.strokeStyle = getVar("--grid");
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cellX, cellY, cell, cell);
+          }
+        }
+      }
+
+      function draw() {
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        ctx.clearRect(0, 0, width, height);
+
+        const pad = 24;
+        const usableW = width - pad * 2;
+        const usableH = height - pad * 2;
+        const cell = Math.min(usableW / state.width, usableH / state.height);
+        const offsetX = (width - state.width * cell) / 2;
+        const offsetY = (height - state.height * cell) / 2;
+
+        drawGrid(cell, offsetX, offsetY);
+
+        const rad = (state.angle * Math.PI) / 180;
+        const dirX = Math.cos(rad);
+        const dirY = Math.sin(rad);
+        const planeLen = Math.tan((state.fov * Math.PI) / 360);
+        const planeX = -dirY * planeLen;
+        const planeY = dirX * planeLen;
+
+        function rayStats(cameraX) {
+          const rayDirX = dirX + planeX * cameraX;
+          const rayDirY = dirY + planeY * cameraX;
+          const deltaDistX = rayDirX === 0 ? 1e30 : Math.abs(1 / rayDirX);
+          const deltaDistY = rayDirY === 0 ? 1e30 : Math.abs(1 / rayDirY);
+          return { cameraX, rayDirX, rayDirY, deltaDistX, deltaDistY };
+        }
+
+        const px = offsetX + state.posX * cell;
+        const py = offsetY + state.posY * cell;
+
+        const rayCountInt = state.rays;
+        const leftCam = -1;
+        const rightCam = (2 * (rayCountInt - 1)) / rayCountInt - 1;
+        const leftStats = rayStats(leftCam);
+        const centerStats = rayStats(0);
+        const rightStats = rayStats(rightCam);
+        const inspectIdx = Math.min(Math.max(state.inspect, 0), rayCountInt - 1);
+        const inspectCam = (2 * inspectIdx) / rayCountInt - 1;
+        const inspectStats = rayStats(inspectCam);
+        const inspectSetup = ddaSetup(state.posX, state.posY, inspectStats.rayDirX, inspectStats.rayDirY);
+        const inspectHit = castRay(state.posX, state.posY, inspectStats.rayDirX, inspectStats.rayDirY);
+        const deltaXPoints = computeDeltaPoints(
+          inspectSetup.sideDistX,
+          inspectSetup.deltaDistX,
+          inspectStats.rayDirX,
+          inspectStats.rayDirY,
+          state.posX,
+          state.posY,
+          4,
+          inspectHit.hitDist
+        );
+        const ddaSteps = computeDdaSteps(
+          inspectSetup,
+          inspectStats.rayDirX,
+          inspectStats.rayDirY,
+          state.posX,
+          state.posY,
+          6,
+          inspectHit.hitDist
+        );
+        const deltaYPoints = computeDeltaPoints(
+          inspectSetup.sideDistY,
+          inspectSetup.deltaDistY,
+          inspectStats.rayDirX,
+          inspectStats.rayDirY,
+          state.posX,
+          state.posY,
+          4,
+          inspectHit.hitDist
+        );
+        const flipApplied =
+          (inspectHit.side === 0 && inspectStats.rayDirX < 0) ||
+          (inspectHit.side === 1 && inspectStats.rayDirY > 0);
+        let wallX = 0;
+        if (Number.isFinite(inspectHit.hitDist)) {
+          if (inspectHit.side === 0) {
+            wallX = state.posY + inspectHit.hitDist * inspectStats.rayDirY;
+          } else {
+            wallX = state.posX + inspectHit.hitDist * inspectStats.rayDirX;
+          }
+          wallX -= Math.floor(wallX);
+          if (wallX < 0) wallX += 1;
+        }
+        let rawTexX = Math.floor(wallX * state.texWidth);
+        if (rawTexX < 0) rawTexX = 0;
+        if (rawTexX >= state.texWidth) rawTexX = state.texWidth - 1;
+        let finalTexX = flipApplied ? state.texWidth - rawTexX - 1 : rawTexX;
+        if (finalTexX < 0) finalTexX = 0;
+        if (finalTexX >= state.texWidth) finalTexX = state.texWidth - 1;
+        const texName =
+          inspectHit.side === 0
+            ? (inspectStats.rayDirX < 0 ? "E" : "W")
+            : (inspectStats.rayDirY < 0 ? "S" : "N");
+
+        for (let i = 0; i < rayCountInt; i++) {
+          const cameraX = (2 * i) / rayCountInt - 1;
+          const rayDirX = dirX + planeX * cameraX;
+          const rayDirY = dirY + planeY * cameraX;
+          const hit = castRay(state.posX, state.posY, rayDirX, rayDirY);
+
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(offsetX + hit.hitX * cell, offsetY + hit.hitY * cell);
+          const isInspect = i === inspectIdx;
+          ctx.strokeStyle = isInspect ? getVar("--ray-strong") : getVar("--ray");
+          ctx.lineWidth = isInspect ? 2 : 1;
+          ctx.stroke();
+
+          ctx.fillStyle = getVar("--hit");
+          ctx.beginPath();
+          ctx.arc(offsetX + hit.hitX * cell, offsetY + hit.hitY * cell, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (state.showDelta) {
+          if (deltaXPoints[0]) {
+            ctx.save();
+            ctx.strokeStyle = getVar("--delta-x");
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(offsetX + deltaXPoints[0].x * cell, offsetY + deltaXPoints[0].y * cell);
+            ctx.stroke();
+            ctx.restore();
+          }
+          if (deltaYPoints[0]) {
+            ctx.save();
+            ctx.strokeStyle = getVar("--delta-y");
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(offsetX + deltaYPoints[0].x * cell, offsetY + deltaYPoints[0].y * cell);
+            ctx.stroke();
+            ctx.restore();
+          }
+          drawDeltaMarkers(deltaXPoints, deltaYPoints, cell, offsetX, offsetY);
+        }
+        if (state.showDda) {
+          drawDdaSteps(ddaSteps, cell, offsetX, offsetY);
+        }
+        if (state.showUnit) {
+          drawUnitStep(state.posX, state.posY, inspectStats.rayDirX, inspectStats.rayDirY, cell, offsetX, offsetY);
+        }
+        if (state.showFovTriangle) {
+          drawFovTriangle(state.posX, state.posY, dirX, dirY, planeX, planeY, planeLen, cell, offsetX, offsetY);
+        }
+        drawTextureMapping(
+          wallX,
+          state.texWidth,
+          rawTexX,
+          finalTexX,
+          flipApplied,
+          inspectHit.side,
+          inspectStats.rayDirX,
+          inspectStats.rayDirY
+        );
+
+        ctx.strokeStyle = getVar("--plane");
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(px - planeX * cell, py - planeY * cell);
+        ctx.lineTo(px + planeX * cell, py + planeY * cell);
+        ctx.stroke();
+
+        ctx.strokeStyle = getVar("--dir");
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + dirX * cell * 1.2, py + dirY * cell * 1.2);
+        ctx.stroke();
+
+        ctx.fillStyle = getVar("--dir");
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        const infoLines = [
+          `inspect ray (x=${inspectIdx}, camera_x=${inspectCam.toFixed(2)})`,
+          `dir=(${inspectStats.rayDirX.toFixed(2)}, ${inspectStats.rayDirY.toFixed(2)})`,
+          `side_dist_x=${inspectSetup.sideDistX.toFixed(2)}`,
+          `side_dist_y=${inspectSetup.sideDistY.toFixed(2)}`,
+          `delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}`,
+          `delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}`,
+          `hit_dist=${inspectHit.hitDist.toFixed(2)}`
+        ];
+        if (deltaXPoints[0]) {
+          infoLines.push(
+            `X1 t=${deltaXPoints[0].t.toFixed(2)} pos=(${deltaXPoints[0].x.toFixed(2)}, ${deltaXPoints[0].y.toFixed(2)})`
+          );
+        }
+        if (deltaYPoints[0]) {
+          infoLines.push(
+            `Y1 t=${deltaYPoints[0].t.toFixed(2)} pos=(${deltaYPoints[0].x.toFixed(2)}, ${deltaYPoints[0].y.toFixed(2)})`
+          );
+        }
+        if (ddaSteps[0]) {
+          const first = ddaSteps[0];
+          infoLines.push(
+            `D1${first.axis} t=${first.t.toFixed(2)} cell=(${first.mapX}, ${first.mapY})`
+          );
+        }
+        infoLines.push(
+          `t=1 pos=(${(state.posX + inspectStats.rayDirX).toFixed(2)}, ${(state.posY + inspectStats.rayDirY).toFixed(2)})`
+        );
+        infoLines.push(
+          `wall_x=${wallX.toFixed(2)} tex_x=${finalTexX} tex=${texName} flip=${flipApplied ? "yes" : "no"}`
+        );
+        drawInfoBox(infoLines, pad, pad);
+
+        readout.textContent =
+          `dir=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})  plane=(${planeX.toFixed(2)}, ${planeY.toFixed(2)})\n` +
+          `fov=${state.fov}  plane_len=${planeLen.toFixed(2)}  (tan(FOV/2))\n` +
+          `camera_x left=${leftCam.toFixed(2)}  center=${(0).toFixed(2)}  right=${rightCam.toFixed(2)}\n` +
+          `left delta_dist_x=${leftStats.deltaDistX.toFixed(2)}  right delta_dist_x=${rightStats.deltaDistX.toFixed(2)}\n` +
+          `center delta_dist_x=${centerStats.deltaDistX.toFixed(2)}  center delta_dist_y=${centerStats.deltaDistY.toFixed(2)}\n` +
+          `inspect delta_dist_x=${inspectStats.deltaDistX.toFixed(2)}  inspect delta_dist_y=${inspectStats.deltaDistY.toFixed(2)}\n` +
+          `tex_w=${state.texWidth}  wall_x=${wallX.toFixed(2)}  tex_x=${finalTexX}  tex=${texName}  flip=${flipApplied ? "yes" : "no"}\n` +
+          `pos=(${state.posX.toFixed(2)}, ${state.posY.toFixed(2)})  map size=${state.width}x${state.height}`;
+      }
+
+      function drawInfoBox(lines, x, y) {
+        const padding = 8;
+        const lineHeight = 16;
+        ctx.save();
+        ctx.font = '12px "Space Mono", "Courier New", monospace';
+        let boxWidth = 0;
+        for (const line of lines) {
+          boxWidth = Math.max(boxWidth, ctx.measureText(line).width);
+        }
+        boxWidth += padding * 2;
+        const boxHeight = lines.length * lineHeight + padding * 2;
+        ctx.fillStyle = "rgba(248, 244, 234, 0.9)";
+        ctx.strokeStyle = getVar("--grid");
+        ctx.lineWidth = 1;
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+        ctx.strokeRect(x, y, boxWidth, boxHeight);
+        ctx.fillStyle = getVar("--ink");
+        lines.forEach((line, idx) => {
+          ctx.fillText(line, x + padding, y + padding + lineHeight * (idx + 1) - 4);
+        });
+        ctx.restore();
+      }
+
+      function getVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function updateFromInputs() {
+        state.rays = parseInt(rayCount.value, 10);
+        state.inspect = parseInt(inspectRay.value, 10);
+        syncInspectRange();
+        state.texWidth = parseInt(texWidth.value, 10);
+        state.showDelta = showDelta.checked;
+        state.showDda = showDda.checked;
+        state.showUnit = showUnit.checked;
+        state.showFovTriangle = showFovTriangle.checked;
+        state.showLabels = showLabels.checked;
+        state.markerSize = parseInt(markerSize.value, 10);
+        state.fov = parseInt(fov.value, 10);
+        state.angle = parseInt(angle.value, 10);
+        state.posX = parseFloat(posX.value);
+        state.posY = parseFloat(posY.value);
+        updateLabels();
+        draw();
+        saveSettings();
+      }
+
+      rayCount.addEventListener("input", updateFromInputs);
+      inspectRay.addEventListener("input", updateFromInputs);
+      texWidth.addEventListener("input", updateFromInputs);
+      showDelta.addEventListener("change", updateFromInputs);
+      showDda.addEventListener("change", updateFromInputs);
+      showUnit.addEventListener("change", updateFromInputs);
+      showFovTriangle.addEventListener("change", updateFromInputs);
+      showLabels.addEventListener("change", updateFromInputs);
+      markerSize.addEventListener("input", updateFromInputs);
+      fov.addEventListener("input", updateFromInputs);
+      angle.addEventListener("input", updateFromInputs);
+      posX.addEventListener("input", updateFromInputs);
+      posY.addEventListener("input", updateFromInputs);
+
+      applyMap.addEventListener("click", () => applyMapData(false));
+      useSpawn.addEventListener("click", () => applyMapData(true));
+      snapCenter.addEventListener("click", () => {
+        state.posX = Math.floor(state.posX) + 0.5;
+        state.posY = Math.floor(state.posY) + 0.5;
+        posX.value = state.posX.toFixed(1);
+        posY.value = state.posY.toFixed(1);
+        updateFromInputs();
+      });
+
+      document.querySelectorAll("button[data-angle]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.angle = parseInt(btn.dataset.angle, 10);
+          angle.value = state.angle;
+          updateFromInputs();
+        });
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+
+      const saved = loadSettings();
+      if (saved && typeof saved.mapText === "string") {
+        state.posX = typeof saved.posX === "number" ? saved.posX : state.posX;
+        state.posY = typeof saved.posY === "number" ? saved.posY : state.posY;
+        state.angle = typeof saved.angle === "number" ? saved.angle : state.angle;
+        state.fov = typeof saved.fov === "number" ? saved.fov : state.fov;
+        state.rays = typeof saved.rays === "number" ? saved.rays : state.rays;
+        state.inspect = typeof saved.inspect === "number" ? saved.inspect : state.inspect;
+        state.texWidth = typeof saved.texWidth === "number" ? saved.texWidth : state.texWidth;
+        state.showDelta = saved.showDelta !== undefined ? !!saved.showDelta : state.showDelta;
+        state.showDda = saved.showDda !== undefined ? !!saved.showDda : state.showDda;
+        state.showUnit = saved.showUnit !== undefined ? !!saved.showUnit : state.showUnit;
+        state.showFovTriangle =
+          saved.showFovTriangle !== undefined ? !!saved.showFovTriangle : state.showFovTriangle;
+        state.showLabels = saved.showLabels !== undefined ? !!saved.showLabels : state.showLabels;
+        state.markerSize = typeof saved.markerSize === "number" ? saved.markerSize : state.markerSize;
+        mapInput.value = saved.mapText;
+        applyMapData(false);
+        rayCount.value = state.rays;
+        inspectRay.value = state.inspect;
+        texWidth.value = state.texWidth;
+        fov.value = state.fov;
+        angle.value = state.angle;
+        showDelta.checked = state.showDelta;
+        showDda.checked = state.showDda;
+        showUnit.checked = state.showUnit;
+        showFovTriangle.checked = state.showFovTriangle;
+        showLabels.checked = state.showLabels;
+        markerSize.value = state.markerSize;
+        updateFromInputs();
+      } else {
+        setDefaultMap();
+      }
+      resizeCanvas();
+    </script>
+  </body>
+</html>
