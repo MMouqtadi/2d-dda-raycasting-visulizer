@@ -281,6 +281,7 @@
       <header>
         <h1>cub3D Raycasting Playground</h1>
         <p>Top-down view of dir, plane, rays, and where each ray hits the map grid.</p>
+        <p class="hint">Controls: W/S move, A/D strafe, Left/Right rotate, Shift to sprint.</p>
       </header>
 
       <main class="layout">
@@ -385,7 +386,7 @@
           <div class="group">
             <label>Angle (0=E, 90=S, 180=W, 270=N)</label>
             <div class="row">
-              <input id="angle" type="range" min="0" max="359" value="270" />
+              <input id="angle" type="range" min="0" max="359" step="0.1" value="270" />
               <div class="value" id="angleValue">270</div>
             </div>
             <div class="button-row" style="margin-top: 8px;">
@@ -475,6 +476,122 @@
       const texCanvas = document.getElementById("texView");
       const texCtx = texCanvas.getContext("2d");
       const STORAGE_KEY = "cub3d-raycast-visualizer-v1";
+      const MOVE = {
+        walkSpeed: 2.4,
+        sprintSpeed: 3.6,
+        rotationSpeed: 120,
+        collisionRadius: 0.2
+      };
+      const keys = new Set();
+
+      function isTypingTarget(target) {
+        if (!target) return false;
+        const tag = target.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+      }
+
+      function wrapAngle(deg) {
+        return ((deg % 360) + 360) % 360;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function isBlocked(x, y) {
+        const radius = MOVE.collisionRadius;
+        const points = [
+          [x - radius, y - radius],
+          [x + radius, y - radius],
+          [x - radius, y + radius],
+          [x + radius, y + radius]
+        ];
+
+        for (const [px, py] of points) {
+          const mapX = Math.floor(px);
+          const mapY = Math.floor(py);
+          if (mapX < 0 || mapY < 0 || mapX >= state.width || mapY >= state.height) return true;
+          const cell = state.grid[mapY][mapX];
+          if (cell === "1" || cell === " ") return true;
+        }
+        return false;
+      }
+
+      function applyMove(dx, dy) {
+        let moved = false;
+        const nextX = state.posX + dx;
+        if (!isBlocked(nextX, state.posY)) {
+          state.posX = nextX;
+          moved = true;
+        }
+        const nextY = state.posY + dy;
+        if (!isBlocked(state.posX, nextY)) {
+          state.posY = nextY;
+          moved = true;
+        }
+
+        const maxX = Math.max(0.1, state.width - 0.1);
+        const maxY = Math.max(0.1, state.height - 0.1);
+        state.posX = clamp(state.posX, 0.1, maxX);
+        state.posY = clamp(state.posY, 0.1, maxY);
+        return moved;
+      }
+
+      function syncInputsFromState() {
+        posX.value = state.posX.toFixed(1);
+        posY.value = state.posY.toFixed(1);
+        angle.value = wrapAngle(state.angle).toFixed(1);
+        updateLabels();
+      }
+
+      function handleMovement(dt) {
+        let moved = false;
+        let rotateDir = 0;
+        if (keys.has("ArrowLeft") || keys.has("KeyQ")) rotateDir -= 1;
+        if (keys.has("ArrowRight") || keys.has("KeyE")) rotateDir += 1;
+
+        if (rotateDir !== 0) {
+          state.angle = wrapAngle(state.angle + rotateDir * MOVE.rotationSpeed * dt);
+          moved = true;
+        }
+
+        const rad = (state.angle * Math.PI) / 180;
+        const forwardX = Math.cos(rad);
+        const forwardY = Math.sin(rad);
+        const rightX = -forwardY;
+        const rightY = forwardX;
+        let moveX = 0;
+        let moveY = 0;
+
+        if (keys.has("KeyW") || keys.has("ArrowUp")) {
+          moveX += forwardX;
+          moveY += forwardY;
+        }
+        if (keys.has("KeyS") || keys.has("ArrowDown")) {
+          moveX -= forwardX;
+          moveY -= forwardY;
+        }
+        if (keys.has("KeyD")) {
+          moveX += rightX;
+          moveY += rightY;
+        }
+        if (keys.has("KeyA")) {
+          moveX -= rightX;
+          moveY -= rightY;
+        }
+
+        const length = Math.hypot(moveX, moveY);
+        if (length > 0) {
+          const speed =
+            keys.has("ShiftLeft") || keys.has("ShiftRight") ? MOVE.sprintSpeed : MOVE.walkSpeed;
+          const step = speed * dt;
+          moveX = (moveX / length) * step;
+          moveY = (moveY / length) * step;
+          moved = applyMove(moveX, moveY) || moved;
+        }
+
+        return moved;
+      }
 
       function saveSettings() {
         try {
@@ -574,7 +691,7 @@
         posY.max = Math.max(0.1, state.height - 0.1).toFixed(1);
         posX.value = state.posX.toFixed(1);
         posY.value = state.posY.toFixed(1);
-        angle.value = state.angle;
+        angle.value = state.angle.toFixed(1);
         updateLabels();
         draw();
         saveSettings();
@@ -593,7 +710,7 @@
         markerSizeValue.textContent = state.markerSize;
         fovValue.textContent = state.fov;
         planeLenValue.textContent = Math.tan((state.fov * Math.PI) / 360).toFixed(2);
-        angleValue.textContent = state.angle;
+        angleValue.textContent = state.angle.toFixed(1);
         posXValue.textContent = state.posX.toFixed(1);
         posYValue.textContent = state.posY.toFixed(1);
       }
@@ -1283,7 +1400,7 @@
         state.showLabels = showLabels.checked;
         state.markerSize = parseInt(markerSize.value, 10);
         state.fov = parseInt(fov.value, 10);
-        state.angle = parseInt(angle.value, 10);
+        state.angle = wrapAngle(parseFloat(angle.value));
         state.posX = parseFloat(posX.value);
         state.posY = parseFloat(posY.value);
         updateLabels();
@@ -1305,6 +1422,24 @@
       posX.addEventListener("input", updateFromInputs);
       posY.addEventListener("input", updateFromInputs);
 
+      window.addEventListener("keydown", (event) => {
+        if (isTypingTarget(event.target)) return;
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
+          event.preventDefault();
+        }
+        keys.add(event.code);
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (isTypingTarget(event.target)) return;
+        keys.delete(event.code);
+      });
+
+      window.addEventListener("blur", () => keys.clear());
+      document.addEventListener("focusin", (event) => {
+        if (isTypingTarget(event.target)) keys.clear();
+      });
+
       applyMap.addEventListener("click", () => applyMapData(false));
       useSpawn.addEventListener("click", () => applyMapData(true));
       snapCenter.addEventListener("click", () => {
@@ -1317,19 +1452,32 @@
 
       document.querySelectorAll("button[data-angle]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          state.angle = parseInt(btn.dataset.angle, 10);
-          angle.value = state.angle;
+          angle.value = parseFloat(btn.dataset.angle).toFixed(1);
           updateFromInputs();
         });
       });
 
       window.addEventListener("resize", resizeCanvas);
 
+      let lastFrame = 0;
+      function animate(timestamp) {
+        if (!lastFrame) lastFrame = timestamp;
+        const dt = Math.min((timestamp - lastFrame) / 1000, 0.05);
+        lastFrame = timestamp;
+
+        if (handleMovement(dt)) {
+          syncInputsFromState();
+          draw();
+          saveSettings();
+        }
+        requestAnimationFrame(animate);
+      }
+
       const saved = loadSettings();
       if (saved && typeof saved.mapText === "string") {
         state.posX = typeof saved.posX === "number" ? saved.posX : state.posX;
         state.posY = typeof saved.posY === "number" ? saved.posY : state.posY;
-        state.angle = typeof saved.angle === "number" ? saved.angle : state.angle;
+        state.angle = typeof saved.angle === "number" ? wrapAngle(saved.angle) : state.angle;
         state.fov = typeof saved.fov === "number" ? saved.fov : state.fov;
         state.rays = typeof saved.rays === "number" ? saved.rays : state.rays;
         state.inspect = typeof saved.inspect === "number" ? saved.inspect : state.inspect;
@@ -1347,7 +1495,7 @@
         inspectRay.value = state.inspect;
         texWidth.value = state.texWidth;
         fov.value = state.fov;
-        angle.value = state.angle;
+        angle.value = state.angle.toFixed(1);
         showDelta.checked = state.showDelta;
         showDda.checked = state.showDda;
         showUnit.checked = state.showUnit;
@@ -1359,6 +1507,7 @@
         setDefaultMap();
       }
       resizeCanvas();
+      requestAnimationFrame(animate);
     </script>
   </body>
 </html>
